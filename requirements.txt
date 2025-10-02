@@ -38,6 +38,7 @@ sqlparse>=0.4.5
 
 # Configuration
 toml==0.10.2
+gunicorn==21.2.0
 
 # YouTube Search
 youtube-search-python==1.6.6
