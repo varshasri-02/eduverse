@@ -1,0 +1,193 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-chart-line"></i> Progress Dashboard
+    </h2>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white shadow">
+                <div class="card-body text-center">
+                    <i class="fas fa-clock fa-2x mb-2"></i>
+                    <h5>Total Study Time</h5>
+                    <h3>{{ total_study_time }} min</h3>
+                    <small>{{ week_study_time }} min this week</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-success text-white shadow">
+                <div class="card-body text-center">
+                    <i class="fas fa-book fa-2x mb-2"></i>
+                    <h5>Homework</h5>
+                    <h3>{{ completed_homework }}/{{ total_homework }}</h3>
+                    <small>{{ homework_completion_rate }}% completed</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-info text-white shadow">
+                <div class="card-body text-center">
+                    <i class="fas fa-tasks fa-2x mb-2"></i>
+                    <h5>To-Do Items</h5>
+                    <h3>{{ completed_todos }}/{{ total_todos }}</h3>
+                    <small>{{ todo_completion_rate }}% completed</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-warning text-white shadow">
+                <div class="card-body text-center">
+                    <i class="fas fa-sticky-note fa-2x mb-2"></i>
+                    <h5>Total Notes</h5>
+                    <h3>{{ total_notes }}</h3>
+                    <small>Created notes</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Tasks -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-danger text-white">
+                    <h5><i class="fas fa-exclamation-circle"></i> Pending Tasks</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6 text-center">
+                            <h4>{{ pending_homework }}</h4>
+                            <p class="text-muted">Pending Homework</p>
+                        </div>
+                        <div class="col-6 text-center">
+                            <h4>{{ pending_todos }}</h4>
+                            <p class="text-muted">Pending To-Dos</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Study by Subject -->
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-graduation-cap"></i> Study Time by Subject</h5>
+                </div>
+                <div class="card-body">
+                    {% if study_by_subject %}
+                        <ul class="list-group">
+                            {% for item in study_by_subject %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ item.subject }}
+                                <span class="badge badge-primary badge-pill">{{ item.total_time }} min</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted text-center">No study sessions recorded yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="fas fa-history"></i> Recent Study Sessions</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_sessions %}
+                        <ul class="list-group">
+                            {% for session in recent_sessions %}
+                            <li class="list-group-item">
+                                <strong>{{ session.subject }}</strong>
+                                <br>
+                                <small class="text-muted">
+                                    {{ session.date }} - {{ session.duration }} minutes
+                                    {% if session.completed %}
+                                    <span class="badge badge-success">Completed</span>
+                                    {% else %}
+                                    <span class="badge badge-warning">In Progress</span>
+                                    {% endif %}
+                                </small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted text-center">No recent study sessions.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-white">
+                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Homework</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_homeworks %}
+                        <ul class="list-group">
+                            {% for hw in recent_homeworks %}
+                            <li class="list-group-item">
+                                <strong>{{ hw.subject }}</strong> - {{ hw.title }}
+                                <br>
+                                <small class="text-muted">
+                                    Due: {{ hw.due }}
+                                    {% if hw.is_finished %}
+                                    <span class="badge badge-success">Completed</span>
+                                    {% else %}
+                                    <span class="badge badge-danger">Pending</span>
+                                    {% endif %}
+                                </small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted text-center">No homework assigned.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-md-12 text-center">
+            <a href="{% url 'study-timer' %}" class="btn btn-primary btn-lg mr-2">
+                <i class="fas fa-clock"></i> Start Study Session
+            </a>
+            <a href="{% url 'homework' %}" class="btn btn-success btn-lg mr-2">
+                <i class="fas fa-book"></i> View Homework
+            </a>
+            <a href="{% url 'todo' %}" class="btn btn-info btn-lg mr-2">
+                <i class="fas fa-tasks"></i> View To-Do List
+            </a>
+            <a href="{% url 'notes' %}" class="btn btn-warning btn-lg">
+                <i class="fas fa-sticky-note"></i> View Notes
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    transition: transform 0.2s;
+}
+.card:hover {
+    transform: translateY(-5px);
+}
+</style>
+{% endblock %}

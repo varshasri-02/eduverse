@@ -1,0 +1,78 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+
+{% block content %}
+<section class="text-center container">
+    <h2>Search Videos on YouTube</h2>
+    <p>Search videos and select any video to open on YouTube</p>
+
+    <form action="" method="post" autocomplete="off" class="mb-4">
+        {% csrf_token %}
+        <div class="form-group">
+            <input type="text" name="text" class="form-control d-inline w-50" placeholder="Search YouTube videos..." required>
+        </div>
+        <input class="btn btn-danger mt-2" type="submit" value="Search">
+    </form>
+
+    {% if results %}
+        <div class="results-container">
+        {% for result in results %}
+            <a href="{{ result.link }}" target="_blank" style="text-decoration: none; color: inherit;">
+                <div class="card mb-3 shadow-sm hover-card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                {% if result.thumbnail %}
+                                    <img class="img-fluid rounded" src="{{ result.thumbnail }}" alt="{{ result.title }}">
+                                {% else %}
+                                    <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 180px;">
+                                        No Thumbnail
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8 text-start">
+                                <h4 class="card-title mb-2">{{ result.title }}</h4>
+                                <p class="text-muted mb-2">
+                                    <strong>{{ result.channel }}</strong>
+                                </p>
+                                {% if result.description %}
+                                    <p class="text-secondary mb-2" style="font-size: 0.9rem;">
+                                        {{ result.description|truncatewords:30 }}
+                                    </p>
+                                {% endif %}
+                                <div class="video-meta">
+                                    <span class="badge bg-primary me-2">Duration: {{ result.duration }}</span>
+                                    <span class="badge bg-success me-2">Views: {{ result.views }}</span>
+                                    <span class="badge bg-info">Published: {{ result.published }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info mt-4" role="alert">
+            <i class="bi bi-info-circle"></i> No results yet. Try searching for something!
+        </div>
+    {% endif %}
+</section>
+
+<style>
+    .hover-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .hover-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    .video-meta {
+        margin-top: 10px;
+    }
+    .video-meta .badge {
+        font-size: 0.85rem;
+        padding: 5px 10px;
+    }
+</style>
+{% endblock content %}

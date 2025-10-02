@@ -1,0 +1,34 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <h2 class="text-center mb-4">Share Note</h2>
+            
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <h5>{{ note.title }}</h5>
+                    <p class="text-muted">{{ note.description|truncatewords:50 }}</p>
+                </div>
+            </div>
+
+            <div class="card shadow">
+                <div class="card-body">
+                    <h4>Share Options</h4>
+                    <form method="POST">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        <button type="submit" class="btn btn-primary btn-block">
+                            <i class="fas fa-share"></i> Share Note
+                        </button>
+                    </form>
+                    <a href="{% url 'notes' %}" class="btn btn-secondary btn-block mt-2">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

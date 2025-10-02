@@ -1,0 +1,243 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+
+{% block content %}
+<section class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h2 class="text-center mb-4">AI Study Assistant</h2>
+            <p class="text-center text-muted">Ask me anything about your studies!</p>
+        </div>
+    </div>
+
+    <!-- Chat History -->
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <div class="card shadow-sm mb-4" style="height: 500px; overflow-y: auto;">
+                <div class="card-body" id="chatContainer">
+                    {% if chat_history %}
+                        {% for chat in chat_history reversed %}
+                        <!-- User Message -->
+                        <div class="d-flex justify-content-end mb-3">
+                            <div class="bg-primary text-white rounded p-3" style="max-width: 70%;">
+                                <strong>You:</strong>
+                                <p class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">{{ chat.message }}</p>
+                                <small class="text-white-50">{{ chat.timestamp|date:"M d, Y H:i" }}</small>
+                            </div>
+                        </div>
+                                         
+                        <!-- Bot Response -->
+                        <div class="d-flex justify-content-start mb-3">
+                            <div class="bg-light rounded p-3 bot-message" style="max-width: 70%; word-wrap: break-word;">
+                                <strong>AI Assistant:</strong>
+                                <div class="markdown-content" style="line-height: 1.6;">{{ chat.response }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted mt-5">
+                            <i class="fas fa-robot fa-3x mb-3"></i>
+                            <p>No messages yet. Start a conversation!</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Input Form -->
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="post" class="d-flex gap-2">
+                        {% csrf_token %}
+                        <div class="flex-grow-1">
+                            {{ form.message }}
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i> Send
+                        </button>
+                    </form>
+                                     
+                    {% if chat_history %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'clear_chat_history' %}" class="btn btn-sm btn-outline-danger">
+                            Clear History
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Add Marked.js for Markdown Parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+
+<script>
+    // Configure marked options
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
+    });
+
+    // Convert markdown to HTML on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Parse all markdown content
+        const markdownElements = document.querySelectorAll('.markdown-content');
+        markdownElements.forEach(element => {
+            const markdownText = element.textContent;
+            element.innerHTML = marked.parse(markdownText);
+        });
+
+        // Auto-scroll to bottom of chat
+        var chatContainer = document.getElementById('chatContainer');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    });
+</script>
+
+<style>
+    #chatContainer {
+        background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
+    }
+    
+    .bg-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+    
+    .bg-light {
+        background-color: #f8f9fa !important;
+    }
+
+    /* Style markdown content */
+    .markdown-content {
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+    }
+
+    .markdown-content > *:first-child {
+        margin-top: 0 !important;
+    }
+
+    .markdown-content > *:last-child {
+        margin-bottom: 0 !important;
+    }
+
+    .markdown-content h1,
+    .markdown-content h2,
+    .markdown-content h3 {
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        font-weight: bold;
+    }
+
+    .markdown-content h1 { font-size: 1.5rem; }
+    .markdown-content h2 { font-size: 1.3rem; }
+    .markdown-content h3 { font-size: 1.1rem; }
+
+    .markdown-content p {
+        margin-bottom: 1rem;
+        margin-top: 0.5rem;
+        line-height: 1.6;
+    }
+
+    .markdown-content ul,
+    .markdown-content ol {
+        margin-left: 1.5rem;
+        margin-bottom: 1rem;
+        margin-top: 0.75rem;
+        padding-left: 0;
+    }
+
+    .markdown-content li {
+        margin-bottom: 0.5rem;
+        line-height: 1.5;
+    }
+
+    .markdown-content strong {
+        font-weight: bold;
+    }
+
+    .markdown-content em {
+        font-style: italic;
+    }
+
+    .markdown-content code {
+        background-color: #e9ecef;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 0.9em;
+    }
+
+    .markdown-content pre {
+        background-color: #e9ecef;
+        padding: 1rem;
+        border-radius: 5px;
+        overflow-x: auto;
+        margin-bottom: 0.75rem;
+    }
+
+    .markdown-content pre code {
+        background-color: transparent;
+        padding: 0;
+    }
+
+    /* Ensure bot message container stays properly aligned */
+    .bot-message {
+        display: block;
+    }
+</style>
+
+<script>
+document.querySelector("form").addEventListener("submit", function(e) {
+    e.preventDefault(); // stop reload
+
+    let message = document.querySelector("textarea, input[name='message']").value;
+    let csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+
+    fetch("{% url 'chatbot_api' %}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrf
+        },
+        body: JSON.stringify({message: message})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+
+        // Append user message
+        let chatContainer = document.getElementById("chatContainer");
+        chatContainer.innerHTML += `
+            <div class="d-flex justify-content-end mb-3">
+                <div class="bg-primary text-white rounded p-3" style="max-width: 70%;">
+                    <strong>You:</strong>
+                    <p class="mb-0">${message}</p>
+                </div>
+            </div>
+        `;
+
+        // Append bot response
+        chatContainer.innerHTML += `
+            <div class="d-flex justify-content-start mb-3">
+                <div class="bg-light rounded p-3 bot-message" style="max-width: 70%;">
+                    <strong>AI Assistant:</strong>
+                    <div class="markdown-content">${marked.parse(data.bot)}</div>
+                </div>
+            </div>
+        `;
+
+        // Scroll to bottom
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Clear input
+        document.querySelector("textarea, input[name='message']").value = "";
+    });
+});
+</script>
+{% endblock content %}

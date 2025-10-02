@@ -1,0 +1,52 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block content %}
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-12 text-right mb-3">
+            <a href="{% url 'shared-notes' %}" class="btn btn-info">
+                <i class="fas fa-share-alt"></i> View Shared Notes
+            </a>
+        </div>
+    </div>
+    
+    <hr>
+    <form method="POST">
+        {% csrf_token %}
+        <fieldset class="form-group">
+            <legend class="border-bottom mb-4">Create Notes</legend>
+            {{form|crispy}}
+        </fieldset>
+        <div class="form-group">
+            <button href="" class="btn btn-outline-info" type="submit">
+                Create
+            </button>
+        </div>
+    </form>
+</div><br>
+
+<div class="container">
+    {% for note in notes %}
+    <div class="alert alert-success" role="alert">
+        <div class="d-flex justify-content-between align-items-center">
+            <div style="flex-grow: 1;">
+                <h4>{{ note.title }}</h4>
+                <a href="{% url 'notes-detail' note.id %}">
+                    <p>{{ note.description|striptags|truncatewords:20 }}</p>
+                </a>
+            </div>
+            <div>
+                <a href="{% url 'share-note' note.id %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-share"></i> Share
+                </a>
+                <a href="{% url 'delete-note' note.id %}">
+                    <i class="fa fa-trash fa-2x"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock content %}

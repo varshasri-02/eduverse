@@ -1,0 +1,227 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-clock"></i> Study Timer
+    </h2>
+
+    <!-- Today's Summary -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card bg-gradient-primary text-white shadow-lg">
+                <div class="card-body text-center">
+                    <h3><i class="fas fa-calendar-day"></i> Today's Study Time</h3>
+                    <h1 class="display-3">{{ total_today }} minutes</h1>
+                    <p class="lead">Keep up the great work!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Start New Session Form -->
+        <div class="col-md-5">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4><i class="fas fa-play-circle"></i> Start New Study Session</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        <button type="submit" class="btn btn-success btn-block btn-lg">
+                            <i class="fas fa-play"></i> Start Session
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Tips -->
+            <div class="card shadow mt-3">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="fas fa-lightbulb"></i> Study Tips</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>Take 5-10 min breaks every hour</li>
+                        <li>Stay hydrated while studying</li>
+                        <li>Focus on one subject at a time</li>
+                        <li>Review notes after each session</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Sessions -->
+        <div class="col-md-7">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4><i class="fas fa-history"></i> Recent Study Sessions</h4>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    {% if sessions %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Duration</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for session in sessions %}
+                                    <tr>
+                                        <td><strong>{{ session.subject }}</strong></td>
+                                        <td>
+                                            {% if not session.completed %}
+                                                <span id="timer-{{ session.id }}" class="badge badge-warning">
+                                                    {{ session.duration }} min
+                                                </span>
+                                            {% else %}
+                                                <span class="badge badge-info">
+                                                    {{ session.duration }} min
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ session.date }}</td>
+                                        <td>
+                                            {% if session.completed %}
+                                                <span class="badge badge-success">
+                                                    <i class="fas fa-check"></i> Completed
+                                                </span>
+                                            {% else %}
+                                                <span class="badge badge-warning">
+                                                    <i class="fas fa-clock"></i> In Progress
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if not session.completed %}
+                                                <a href="{% url 'complete-session' session.id %}" 
+                                                   class="btn btn-sm btn-success"
+                                                   title="Mark as Complete">
+                                                    <i class="fas fa-check"></i>
+                                                </a>
+                                            {% endif %}
+                                            <a href="{% url 'delete-session' session.id %}" 
+                                               class="btn btn-sm btn-danger"
+                                               onclick="return confirm('Are you sure you want to delete this session?')"
+                                               title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-clipboard-list fa-3x mb-3"></i>
+                            <p>No study sessions yet. Start your first session above!</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Progress Link -->
+    <div class="row mt-4">
+        <div class="col-md-12 text-center">
+            <a href="{% url 'progress-dashboard' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-chart-line"></i> View Full Progress Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Audio Alert -->
+<audio id="ding" src="{% static 'sounds/alert.mp3' %}" preload="auto"></audio>
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.card {
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+@media (max-width: 768px) {
+    .col-md-5, .col-md-7 {
+        margin-bottom: 20px;
+    }
+}
+</style>
+
+<script>
+// Auto-refresh page every 5 minutes to update "today's time"
+setTimeout(function(){
+    location.reload();
+}, 300000); // 5 minutes
+
+// Countdown timer function
+function startCountdown(id, duration) {
+    let remaining = duration * 60; // convert to seconds
+    let timerElem = document.getElementById("timer-" + id);
+
+    let interval = setInterval(function() {
+        let minutes = Math.floor(remaining / 60);
+        let seconds = remaining % 60;
+        timerElem.innerHTML = minutes + "m " + (seconds < 10 ? "0" : "") + seconds + "s";
+
+        if (remaining <= 0) {
+            clearInterval(interval);
+            timerElem.innerHTML = "⏰ Time’s Up!";
+            playSound();
+            notifyUser("Study session finished!", "Great job completing your session 🎉");
+        }
+        remaining--;
+    }, 1000);
+}
+
+// Play sound alert
+function playSound() {
+    document.getElementById("ding").play();
+}
+
+// Browser notification
+function notifyUser(title, message) {
+    if (Notification.permission === "granted") {
+        new Notification(title, { body: message, icon: "{% static 'images/study.png' %}" });
+    }
+}
+
+// Request notification permission on load
+if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+}
+
+// Pass active sessions into JS
+const sessions = [
+    {% for session in sessions %}
+        {% if not session.completed %}
+            { id: {{ session.id }}, duration: {{ session.duration|default:0 }} },
+        {% endif %}
+    {% endfor %}
+];
+
+// Start countdowns for active sessions
+sessions.forEach(s => startCountdown(s.id, s.duration));
+</script>
+{% endblock %}
