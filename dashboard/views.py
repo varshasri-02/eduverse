@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from . forms import *
 from django.contrib import messages
 from django.views import generic
@@ -7,7 +7,7 @@ import requests
 import wikipedia
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 import random
 import yt_dlp
 import google.generativeai as genai
@@ -15,13 +15,28 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Sum, Count, Q
-
+from django.db import connection
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import never_cache
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from xhtml2pdf import pisa
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from wikipedia.exceptions import DisambiguationError, PageError
+import sys
+import json
 
 
 # Create your views here.
 
 def home(request):
     return render(request, 'dashboard/home.html')
+
 
 # Method to open notes feature and create new notes
 @login_required
@@ -30,7 +45,10 @@ def notes(request):
         form = NotesForm(request.POST)
         if form.is_valid():
             notes = Notes(
-                user=request.user, title=request.POST['title'], description=request.POST['description'])
+                user=request.user, 
+                title=request.POST['title'], 
+                description=request.POST['description']
+            )
             notes.save()
             messages.success(request, f"Notes Added from {request.user.username} successfully!")
             return redirect("notes")
@@ -40,21 +58,26 @@ def notes(request):
     context = {'notes': notes, 'form': form}
     return render(request, 'dashboard/notes.html', context)
 
+
 # Method to delete an existing note
 @login_required
 def delete_note(request, pk=None):
-    Notes.objects.get(id=pk).delete()
+    note = get_object_or_404(Notes, id=pk, user=request.user)
+    note.delete()
+    messages.success(request, "Note deleted successfully!")
     return redirect("notes")
+
 
 # class to have detailed view of a individual note
 class NotesDetailView(generic.DetailView):
     model = Notes
 
+
 # Method to open Youtube feature and to provide the response according to the search text
 def youtube(request):
     if request.method == "POST":
         form = DashboardFom(request.POST)
-        text = request.POST.get('text') 
+        text = request.POST.get('text')
         result_list = []
 
         if text:
@@ -81,7 +104,7 @@ def youtube(request):
                     if search_results and 'entries' in search_results:
                         # Filter for educational content
                         for video in search_results['entries']:
-                            if video:
+                            if video and video.get('id'):
                                 title = video.get('title', '').lower()
                                 description = (video.get('description', '') or '').lower()
                                 channel = (video.get('channel', '') or video.get('uploader', '')).lower()
@@ -153,6 +176,7 @@ def youtube(request):
                 print("Error while fetching videos:", e)
                 import traceback
                 traceback.print_exc()
+                messages.error(request, "Error fetching videos. Please try again.")
 
         context = {
             'form': form,
@@ -166,6 +190,7 @@ def youtube(request):
     context = {'form': form}
     return render(request, 'dashboard/youtube.html', context)
 
+
 # Method to open Homework feature and create a new homework along with assigning a date of completion to it
 @login_required
 def homework(request):
@@ -173,13 +198,11 @@ def homework(request):
         form = HomeworkForm(request.POST)
         if form.is_valid():
             try:
-                finished = request.POST['is_finished']
-                if finished == 'on':
-                    finished = True
-                else:
-                    finished = False
+                finished = request.POST.get('is_finished', 'off')
+                finished = True if finished == 'on' else False
             except:
                 finished = False
+            
             homeworks = Homework(
                 user=request.user,
                 subject=request.POST['subject'],
@@ -193,11 +216,10 @@ def homework(request):
             return redirect("homework")
     else:
         form = HomeworkForm()
+    
     homework = Homework.objects.filter(user=request.user).order_by("due")
-    if len(homework) == 0:
-        homework_done = True
-    else:
-        homework_done = False
+    homework_done = len(homework) == 0
+    
     context = {
         'homeworks': homework,
         'homeworks_done': homework_done,
@@ -205,22 +227,25 @@ def homework(request):
     }
     return render(request, 'dashboard/homework.html', context)
 
+
 # Method to update the completion status of a homework
 @login_required
 def update_homework(request, pk=None):
-    homework = Homework.objects.get(id=pk)
-    if homework.is_finished == True:
-        homework.is_finished = False
-    else:
-        homework.is_finished = True
+    homework = get_object_or_404(Homework, id=pk, user=request.user)
+    homework.is_finished = not homework.is_finished
     homework.save()
+    messages.success(request, f"Homework status updated!")
     return redirect("homework")
+
 
 # Method to delete an existing homework
 @login_required
 def delete_homework(request, pk=None):
-    Homework.objects.get(id=pk).delete()
+    homework = get_object_or_404(Homework, id=pk, user=request.user)
+    homework.delete()
+    messages.success(request, "Homework deleted successfully!")
     return redirect("homework")
+
 
 # Method to create a todo list using todo feature
 @login_required
@@ -229,13 +254,11 @@ def todo(request):
         form = TodoForm(request.POST)
         if form.is_valid():
             try:
-                finished = request.POST["is_finished"]
-                if finished == 'on':
-                    finished = True
-                else:
-                    finished = False
+                finished = request.POST.get("is_finished", 'off')
+                finished = True if finished == 'on' else False
             except:
                 finished = False
+            
             todos = Todo(
                 user=request.user,
                 title=request.POST['title'],
@@ -246,17 +269,17 @@ def todo(request):
             return redirect("todo")
     else:
         form = TodoForm()
+    
     todo = Todo.objects.filter(user=request.user)
+    
     # Check if there are any todos and if all are finished
     if len(todo) == 0:
         todos_done = True  # No todos exist
     else:
         # Check if all existing todos are finished
         incomplete_todos = todo.filter(is_finished=False).count()
-        if incomplete_todos > 0:
-            todos_done = False  # There are incomplete todos, show the table
-        else:
-            todos_done = True  # All todos are completed
+        todos_done = incomplete_todos == 0
+    
     context = {
         'form': form,
         'todos': todo,
@@ -264,151 +287,264 @@ def todo(request):
     }
     return render(request, "dashboard/todo.html", context)
 
+
 # Method to update completion status of an existing todo
 @login_required
 def update_todo(request, pk=None):
-    todo = Todo.objects.get(id=pk)
-    if todo.is_finished == True:
-        todo.is_finished = False
-    else:
-        todo.is_finished = True
+    todo = get_object_or_404(Todo, id=pk, user=request.user)
+    todo.is_finished = not todo.is_finished
     todo.save()
+    messages.success(request, "Todo status updated!")
     return redirect("todo")
+
 
 # Method to delete an existing todo
 @login_required
 def delete_todo(request, pk=None):
-    Todo.objects.get(id=pk).delete()
+    todo = get_object_or_404(Todo, id=pk, user=request.user)
+    todo.delete()
+    messages.success(request, "Todo deleted successfully!")
     return redirect("todo")
+
 
 # Method to find for the ebook stack based using the keyword searched
 def books(request):
     if request.method == "POST":
         form = DashboardFom(request.POST)
-        text = request.POST['text']
-        url = "https://www.googleapis.com/books/v1/volumes?q="+text
-        r = requests.get(url)
-        answer = r.json()
-        result_list = []
-        for i in range(10):
-            result_dict = {
-                'title': answer['items'][i]['volumeInfo']['title'],
-                'subtitle': answer['items'][i]['volumeInfo'].get('subtitle'),
-                'description': answer['items'][i]['volumeInfo'].get('description'),
-                'count': answer['items'][i]['volumeInfo'].get('pageCount'),
-                'categories': answer['items'][i]['volumeInfo'].get('categories'),
-                'rating': answer['items'][i]['volumeInfo'].get('pageRating'),
-                'thumbnail': answer['items'][i]['volumeInfo'].get('imageLinks').get('thumbnail'),
-                'preview': answer['items'][i]['volumeInfo'].get('previewLink'),
-            }
-            result_list.append(result_dict)
+        text = request.POST.get('text', '')
+        
+        if not text:
+            messages.error(request, "Please enter a search term")
+            return render(request, 'dashboard/books.html', {'form': form})
+        
+        url = "https://www.googleapis.com/books/v1/volumes?q=" + text
+        
+        try:
+            r = requests.get(url, timeout=10)
+            r.raise_for_status()
+            answer = r.json()
+            result_list = []
+            
+            if 'items' in answer:
+                # Get up to 10 results, or however many are available
+                for i in range(min(10, len(answer['items']))):
+                    try:
+                        item = answer['items'][i]
+                        volume_info = item.get('volumeInfo', {})
+                        
+                        # Safely get thumbnail
+                        thumbnail = None
+                        image_links = volume_info.get('imageLinks')
+                        if image_links:
+                            thumbnail = image_links.get('thumbnail') or image_links.get('smallThumbnail')
+                        
+                        result_dict = {
+                            'title': volume_info.get('title', 'No Title'),
+                            'subtitle': volume_info.get('subtitle'),
+                            'description': volume_info.get('description'),
+                            'count': volume_info.get('pageCount'),
+                            'categories': volume_info.get('categories'),
+                            'rating': volume_info.get('averageRating'),
+                            'thumbnail': thumbnail,
+                            'preview': volume_info.get('previewLink'),
+                        }
+                        result_list.append(result_dict)
+                    except Exception as e:
+                        print(f"Error processing book {i}: {e}")
+                        continue
+                
+                if not result_list:
+                    messages.warning(request, "No books found for your search")
+            else:
+                messages.warning(request, "No books found for your search")
+            
             context = {
                 'form': form,
                 'results': result_list
             }
-        return render(request, 'dashboard/books.html', context)
+            return render(request, 'dashboard/books.html', context)
+            
+        except requests.RequestException as e:
+            print(f"Books API Error: {e}")
+            messages.error(request, "Error connecting to books API. Please try again.")
+            context = {'form': form}
+            return render(request, 'dashboard/books.html', context)
     else:
         form = DashboardFom()
+    
     context = {'form': form}
     return render(request, 'dashboard/books.html', context)
+
 
 # Method to perform the dictionary function
 def dictionary(request):
     if request.method == "POST":
         form = DashboardFom(request.POST)
-        text = request.POST['text']
+        text = request.POST.get('text', '').strip()
+        
+        if not text:
+            messages.error(request, "Please enter a word")
+            return render(request, 'dashboard/dictionary.html', {'form': form})
+        
         # API used is dictionaryapi
-        url = "https://api.dictionaryapi.dev/api/v2/entries/en_US/"+text
-        r = requests.get(url)
-        answer = r.json()
+        url = f"https://api.dictionaryapi.dev/api/v2/entries/en_US/{text}"
+        
         try:
-            phonetics = answer[0]['phonetics'][0]['text']
-            audio = answer[0]['phonetics'][0]['audio']
-            definition = answer[0]['meanings'][0]['definitions'][0]['definition']
+            r = requests.get(url, timeout=10)
+            
+            if r.status_code == 200:
+                answer = r.json()
+                try:
+                    phonetics = answer[0].get('phonetics', [{}])[0].get('text', 'N/A')
+                    audio = answer[0].get('phonetics', [{}])[0].get('audio', '')
+                    definition = answer[0].get('meanings', [{}])[0].get('definitions', [{}])[0].get('definition', 'No definition found')
+                    
+                    context = {
+                        'form': form,
+                        'input': text,
+                        'phonetics': phonetics,
+                        'audio': audio,
+                        'definition': definition,
+                    }
+                except (IndexError, KeyError, TypeError) as e:
+                    print(f"Dictionary parsing error: {e}")
+                    context = {
+                        'form': form,
+                        'input': text,
+                        'error': 'Could not parse dictionary data'
+                    }
+            else:
+                context = {
+                    'form': form,
+                    'input': text,
+                    'error': f"Word '{text}' not found in dictionary"
+                }
+        except requests.RequestException as e:
+            print(f"Dictionary API Error: {e}")
             context = {
                 'form': form,
-                'input': text,
-                'phonetics': phonetics,
-                'audio': audio,
-                'definition': definition,
+                'input': '',
+                'error': 'Error connecting to dictionary API'
             }
-        except:
-            context = {
-                'form': form,
-                'input': ''
-            }
+        
         return render(request, 'dashboard/dictionary.html', context)
     else:
         form = DashboardFom()
         context = {'form': form}
+    
     return render(request, 'dashboard/dictionary.html', context)
 
-import random
-import wikipedia
-from wikipedia.exceptions import DisambiguationError, PageError
 
 # Method to perform the WikiPedia search
 def wiki(request):
     if request.method == 'POST':
-        text = request.POST['text']
+        text = request.POST.get('text', '').strip()
         form = DashboardFom()
+        
+        if not text:
+            messages.error(request, "Please enter a search term")
+            return render(request, "dashboard/wiki.html", {'form': form})
+        
         try:
             search = wikipedia.page(text)
+            context = {
+                'form': form,
+                'title': search.title,
+                'link': search.url,
+                'details': search.summary
+            }
+            return render(request, "dashboard/wiki.html", context)
+            
         except DisambiguationError as e:
-            text = random.choice(e.options)
-            search = wikipedia.page(text)
+            # Try a random option from disambiguation
+            try:
+                text = random.choice(e.options)
+                search = wikipedia.page(text)
+                context = {
+                    'form': form,
+                    'title': search.title,
+                    'link': search.url,
+                    'details': search.summary
+                }
+                return render(request, "dashboard/wiki.html", context)
+            except:
+                context = {
+                    'form': form,
+                    'error': f"Multiple results found. Try being more specific. Options: {', '.join(e.options[:5])}"
+                }
+                return render(request, "dashboard/wiki.html", context)
+                
         except PageError:
             context = {
                 'form': form,
                 'error': f"No Wikipedia page found for '{text}'. Try another search."
             }
             return render(request, "dashboard/wiki.html", context)
-
-        context = {
-            'form': form,
-            'title': search.title,
-            'link': search.url,
-            'details': search.summary
-        }
-        return render(request, "dashboard/wiki.html", context)
-
+        except Exception as e:
+            print(f"Wikipedia error: {e}")
+            context = {
+                'form': form,
+                'error': "An error occurred. Please try again."
+            }
+            return render(request, "dashboard/wiki.html", context)
     else:
         form = DashboardFom()
-        context = {
-            'form': form
-        }
+        context = {'form': form}
+    
     return render(request, 'dashboard/wiki.html', context)
 
 
-# Method to manage the expenses and to create and maintain an e-wallet(Profile class is referring to that!)
+# Method to manage the expenses and to create and maintain an e-wallet
 @login_required
 def expense(request):
-    profiles = Profile.objects.filter(user=request.user).first()
+    # Get or create profile for the user
+    profile, created = Profile.objects.get_or_create(user=request.user)
     expenses = Expense.objects.filter(user=request.user)
-    profile = Profile(user=request.user)
-    profile.save()
 
     if request.method == "POST":
-        text = request.POST.get('text')
-        amount = request.POST.get('amount')
-        expense_type = request.POST.get('expense_type')
-        expense = Expense(name=text, amount=amount, expense_type=expense_type, user=request.user)
+        text = request.POST.get('text', '').strip()
+        amount = request.POST.get('amount', '').strip()
+        expense_type = request.POST.get('expense_type', '')
+        
+        if not text or not amount or not expense_type:
+            messages.error(request, "Please fill all fields")
+            return redirect("expense")
+        
+        try:
+            amount_float = float(amount)
+            if amount_float <= 0:
+                messages.error(request, "Amount must be greater than 0")
+                return redirect("expense")
+        except ValueError:
+            messages.error(request, "Invalid amount")
+            return redirect("expense")
+        
+        expense = Expense(
+            name=text, 
+            amount=amount_float, 
+            expense_type=expense_type, 
+            user=request.user
+        )
         expense.save()
 
-        # Updating the wallet status after recieving every transaction history
+        # Updating the wallet status after receiving every transaction history
         if expense_type == 'Positive':
-            profiles.balance += float(amount)
-            profiles.income += float(amount)
+            profile.balance += amount_float
+            profile.income += amount_float
         else:
-            profiles.expenses += float(amount)
-            profiles.balance -= float(amount)
-        profiles.save()
+            profile.expenses += amount_float
+            profile.balance -= amount_float
+        
+        profile.save()
+        messages.success(request, f"Expense added successfully!")
         return redirect("expense")
+    
     context = {
-        'profiles': profiles,
+        'profile': profile,
         'expenses': expenses
     }
     return render(request, 'dashboard/expense.html', context)
+
 
 # Method to perform new user registration
 def register(request):
@@ -421,26 +557,23 @@ def register(request):
             return redirect("login")
     else:
         form = UserRegistrationForm()
-    context = {
-        'form': form
-    }
+    
+    context = {'form': form}
     return render(request, 'dashboard/register.html', context)
+
 
 # Method for profile section (which keeps track of pending Homework and Todos)
 @login_required
 def profile(request):
     homeworks = Homework.objects.filter(is_finished=False, user=request.user)
     todos = Todo.objects.filter(is_finished=False, user=request.user)
+    
     # If there are incomplete homeworks, homework_done should be False
-    if len(homeworks) == 0:
-        homework_done = True  # No incomplete homeworks
-    else:
-        homework_done = False  # There are incomplete homeworks
+    homework_done = len(homeworks) == 0
+    
     # If there are incomplete todos, todos_done should be False
-    if len(todos) == 0:
-        todos_done = True  # No incomplete todos
-    else:
-        todos_done = False  # There are incomplete todos
+    todos_done = len(todos) == 0
+    
     context = {
         'homeworks': homeworks,
         'todos': todos,
@@ -459,6 +592,10 @@ def chatbot(request):
         if form.is_valid():
             user_message = form.cleaned_data['message']
             
+            if not user_message.strip():
+                messages.error(request, "Please enter a message")
+                return redirect('chatbot')
+            
             try:
                 # Configure Google Gemini
                 genai.configure(api_key=settings.GOOGLE_API_KEY)
@@ -475,7 +612,6 @@ Please provide a helpful and educational response:"""
                 
                 # Generate response
                 response = model.generate_content(prompt)
-                
                 bot_response = response.text
                 
                 # Save to database
@@ -491,6 +627,8 @@ Please provide a helpful and educational response:"""
             except Exception as e:
                 messages.error(request, f"Error: {str(e)}")
                 print(f"Chatbot Error: {e}")
+                import traceback
+                traceback.print_exc()
     else:
         form = ChatbotForm()
     
@@ -500,41 +638,51 @@ Please provide a helpful and educational response:"""
     }
     return render(request, 'dashboard/chatbot.html', context)
 
+
 @login_required
 def clear_chat_history(request):
     ChatHistory.objects.filter(user=request.user).delete()
     messages.success(request, "Chat history cleared!")
     return redirect('chatbot')
-from django.http import JsonResponse
+
 
 @login_required
 def chatbot_api(request):
     if request.method == "POST":
-        import json
-        data = json.loads(request.body)
-        user_message = data.get("message", "")
-
         try:
-            genai.configure(api_key=settings.GOOGLE_API_KEY)
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            data = json.loads(request.body)
+            user_message = data.get("message", "").strip()
 
-            prompt = f"You are a helpful study assistant.\n\nStudent Question: {user_message}\n\nAnswer clearly:"
-            response = model.generate_content(prompt)
-            bot_response = response.text
+            if not user_message:
+                return JsonResponse({"error": "Message cannot be empty"}, status=400)
 
-            ChatHistory.objects.create(
-                user=request.user,
-                message=user_message,
-                response=bot_response
-            )
+            try:
+                genai.configure(api_key=settings.GOOGLE_API_KEY)
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-            return JsonResponse({
-                "user": user_message,
-                "bot": bot_response
-            })
+                prompt = f"You are a helpful study assistant.\n\nStudent Question: {user_message}\n\nAnswer clearly:"
+                response = model.generate_content(prompt)
+                bot_response = response.text
 
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
+                ChatHistory.objects.create(
+                    user=request.user,
+                    message=user_message,
+                    response=bot_response
+                )
+
+                return JsonResponse({
+                    "user": user_message,
+                    "bot": bot_response
+                })
+
+            except Exception as e:
+                print(f"Gemini API Error: {e}")
+                return JsonResponse({"error": "AI service error"}, status=500)
+                
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
 # Method to logout user
@@ -542,6 +690,8 @@ def logout_view(request):
     logout(request)
     messages.success(request, "You have been logged out successfully!")
     return redirect('login')
+
+
 # Study Timer View
 @login_required
 def study_timer(request):
@@ -556,7 +706,7 @@ def study_timer(request):
     else:
         form = StudySessionForm()
     
-    sessions = StudySession.objects.filter(user=request.user)[:10]
+    sessions = StudySession.objects.filter(user=request.user).order_by('-date', '-start_time')[:10]
     today = timezone.now().date()
     today_sessions = StudySession.objects.filter(
         user=request.user, 
@@ -572,20 +722,24 @@ def study_timer(request):
     }
     return render(request, 'dashboard/study_timer.html', context)
 
+
 @login_required
 def complete_session(request, pk):
-    session = StudySession.objects.get(id=pk, user=request.user)
+    session = get_object_or_404(StudySession, id=pk, user=request.user)
     session.completed = True
     session.end_time = timezone.now()
     session.save()
     messages.success(request, f"Great job! You studied {session.subject} for {session.duration} minutes!")
     return redirect('study-timer')
 
+
 @login_required
 def delete_session(request, pk):
-    StudySession.objects.get(id=pk, user=request.user).delete()
+    session = get_object_or_404(StudySession, id=pk, user=request.user)
+    session.delete()
     messages.success(request, "Session deleted!")
     return redirect('study-timer')
+
 
 @login_required
 def progress_dashboard(request):
@@ -610,7 +764,7 @@ def progress_dashboard(request):
     pending_todos = total_todos - completed_todos
     
     total_notes = Notes.objects.filter(user=user).count()
-    recent_sessions = StudySession.objects.filter(user=user)[:5]
+    recent_sessions = StudySession.objects.filter(user=user).order_by('-date', '-start_time')[:5]
     recent_homeworks = Homework.objects.filter(user=user).order_by('-due')[:5]
     
     study_by_subject = StudySession.objects.filter(
@@ -640,15 +794,16 @@ def progress_dashboard(request):
     }
     return render(request, 'dashboard/progress_dashboard.html', context)
 
+
 @login_required
 def share_note(request, pk):
-    note = Notes.objects.get(id=pk, user=request.user)
+    note = get_object_or_404(Notes, id=pk, user=request.user)
     
     if request.method == "POST":
         form = ShareNoteForm(request.POST)
         if form.is_valid():
-            username = form.cleaned_data['username']
-            make_public = form.cleaned_data['make_public']
+            username = form.cleaned_data.get('username', '').strip()
+            make_public = form.cleaned_data.get('make_public', False)
             
             shared_note, created = SharedNote.objects.get_or_create(
                 note=note,
@@ -662,10 +817,15 @@ def share_note(request, pk):
             elif username:
                 try:
                     share_with_user = User.objects.get(username=username)
-                    shared_note.shared_with.add(share_with_user)
-                    messages.success(request, f"Note shared with {username}!")
+                    if share_with_user == request.user:
+                        messages.warning(request, "You cannot share a note with yourself!")
+                    else:
+                        shared_note.shared_with.add(share_with_user)
+                        messages.success(request, f"Note shared with {username}!")
                 except User.DoesNotExist:
                     messages.error(request, f"User {username} not found!")
+            else:
+                messages.warning(request, "Please enter a username or check 'Make Public'")
             
             return redirect('notes')
     else:
@@ -674,14 +834,24 @@ def share_note(request, pk):
     context = {'form': form, 'note': note}
     return render(request, 'dashboard/share_note.html', context)
 
+
 @login_required
 def shared_notes(request):
-    # Only notes that exist
+    # Notes shared with me or public (excluding my own notes)
     shared_with_me = SharedNote.objects.filter(
         Q(shared_with=request.user) | Q(is_public=True)
-    ).exclude(shared_by=request.user).exclude(note__isnull=True)
+    ).exclude(
+        shared_by=request.user
+    ).select_related('note', 'shared_by').filter(
+        note__isnull=False
+    )
 
-    my_shared_notes = SharedNote.objects.filter(shared_by=request.user).exclude(note__isnull=True)
+    # Notes I've shared with others
+    my_shared_notes = SharedNote.objects.filter(
+        shared_by=request.user
+    ).select_related('note').filter(
+        note__isnull=False
+    )
 
     context = {
         'shared_with_me': shared_with_me,
@@ -689,12 +859,6 @@ def shared_notes(request):
     }
     return render(request, 'dashboard/shared_notes.html', context)
 
-from django.core.mail import send_mail
-from django.http import HttpResponse
-from django.template.loader import render_to_string
-from xhtml2pdf import pisa
-
-from django.shortcuts import get_object_or_404
 
 @login_required
 def download_note_pdf(request, pk):
@@ -708,17 +872,38 @@ def download_note_pdf(request, pk):
         id=pk
     )
 
-    # PDF generation logic here
-    from io import BytesIO
-    from django.http import HttpResponse
-    from reportlab.pdfgen import canvas
-
+    # Create PDF using ReportLab
     buffer = BytesIO()
-    p = canvas.Canvas(buffer)
-    p.drawString(100, 800, note.title)
-    p.drawString(100, 780, note.description)
-    p.showPage()
-    p.save()
-
+    
+    # Create the PDF document
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Add title
+    title_style = styles['Heading1']
+    story.append(Paragraph(note.title, title_style))
+    story.append(Spacer(1, 0.2*inch))
+    
+    # Add description/content
+    body_style = styles['BodyText']
+    # Split description into paragraphs
+    paragraphs = note.description.split('\n')
+    for para in paragraphs:
+        if para.strip():
+            story.append(Paragraph(para, body_style))
+            story.append(Spacer(1, 0.1*inch))
+    
+    # Build PDF
+    doc.build(story)
+    
+    # Get PDF value
     buffer.seek(0)
-    return HttpResponse(buffer, content_type='application/pdf')
+    
+    # Create response
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{note.title}.pdf"'
+    
+    return response
+
+

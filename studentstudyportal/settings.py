@@ -134,3 +134,26 @@ if 'RENDER' in os.environ:
     # Static files
     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    # -----------------------------
+# STATIC & MEDIA CONFIGURATION
+# -----------------------------
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [BASE_DIR / "static"]  # your "static" folder with css/images
+STATIC_ROOT = BASE_DIR / "staticfiles"    # folder where Django collects all static files
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / "media"           # folder for uploaded images/files
+
+# WhiteNoise (for serving static in Docker)
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+
+
+    
+
+

@@ -1,0 +1,55 @@
+# ============================================
+# EDUVERSE - .dockerignore FILE
+# ============================================
+# Files listed here won't be copied into Docker container
+# This makes builds faster and images smaller!
+
+# Python cache files (not needed in container)
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment (container has its own Python)
+venv/
+env/
+ENV/
+.venv
+
+# Database file (we'll create fresh in container)
+*.sqlite3
+db.sqlite3
+
+# IDE files (not needed in container)
+.vscode/
+.idea/
+*.swp
+
+# Git files (not needed in container)
+.git/
+.gitignore
+
+# Documentation (not needed to run app)
+README.md
+*.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables (will set differently in container)
+.env
+
+# ============================================
+# WHY THIS MATTERS:
+# ============================================
+# Without .dockerignore:
+#   - Copies everything = slow build
+#   - Copies 50MB of venv = waste
+#   - Copies .git history = security risk
+#
+# With .dockerignore:
+#   - Only copies needed files = fast build
+#   - Smaller image size
+#   - More secure
+# ============================================

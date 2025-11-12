@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: gunicorn studentstudyportal.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    volumes:
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+      - ./data:/app/data  # For SQLite database
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: always
+    networks:
+      - eduverse-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+    depends_on:
+      - web
+    restart: always
+    networks:
+      - eduverse-network
+
+networks:
+  eduverse-network:
+    driver: bridge

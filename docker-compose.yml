@@ -1,0 +1,29 @@
+services:
+  web:
+    build: .
+    container_name: eduverse_web
+
+    command: gunicorn studentstudyportal.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60
+
+    ports:
+      - "8000:8000"
+
+    env_file:
+      - .env
+
+    environment:
+      - DEBUG=False
+      - PYTHONUNBUFFERED=1
+
+    volumes:
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health_check/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
