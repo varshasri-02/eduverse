@@ -3,7 +3,7 @@ name: Deploy Django App to EC2
 on:
   push:
     branches:
-      - main  # runs every time you push to the main branch
+      - main  # Runs every time you push to main
 
 jobs:
   deploy:
