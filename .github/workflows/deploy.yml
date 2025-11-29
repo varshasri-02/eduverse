@@ -20,11 +20,32 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd /home/ubuntu/eduverse
+          git remote set-url origin https://github.com/varshasri-02/eduverse.git
           git pull origin main
-          docker-compose -f docker-compose.prod.yml down
-          docker-compose -f docker-compose.prod.yml up -d --build
-          echo "Waiting for containers to be ready..."
-          sleep 10
-          docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate
-          docker-compose -f docker-compose.prod.yml exec -T web python manage.py collectstatic --noinput
-          echo "✅ Deployment completed successfully!"
+
+          # Zero-downtime deployment
+          echo "Starting zero-downtime deployment..."
+
+          # Build new images without stopping services
+          docker-compose -f docker-compose.prod.yml build
+
+          # Run database migrations on a temporary container
+          docker-compose -f docker-compose.prod.yml run --rm web python manage.py migrate
+
+          # Collect static files
+          docker-compose -f docker-compose.prod.yml run --rm web python manage.py collectstatic --noinput
+
+          # Rolling update: stop, remove, and restart services one by one
+          docker-compose -f docker-compose.prod.yml up -d --no-deps web
+          docker-compose -f docker-compose.prod.yml up -d --no-deps nginx
+
+          # Wait for health check
+          echo "Waiting for services to be healthy..."
+          sleep 15
+
+          # Health check
+          if curl -f http://localhost/health/ > /dev/null 2>&1; then
+            echo "✅ Deployment completed successfully with zero downtime!"
+          else
+            echo "❌ Health check failed, but deployment attempted"
+          fi

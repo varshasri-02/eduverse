@@ -17,7 +17,7 @@ from datetime import timedelta
 from django.db.models import Sum, Count, Q
 from django.db import connection
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.cache import never_cache
+from django.views.decorators.cache import never_cache, cache_page
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from xhtml2pdf import pisa
@@ -30,6 +30,15 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from wikipedia.exceptions import DisambiguationError, PageError
 import sys
 import json
+
+# REST Framework imports
+from rest_framework import viewsets, status
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.throttling import UserRateThrottle
+from .serializers import *
 
 
 # Create your views here.
@@ -903,7 +912,236 @@ def download_note_pdf(request, pk):
     # Create response
     response = HttpResponse(buffer, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{note.title}.pdf"'
-    
     return response
+
+
+# ==================== REST API VIEWS ====================
+
+@api_view(['POST'])
+def api_login(request):
+    """API endpoint for user login with JWT tokens"""
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    if not username or not password:
+        return Response({'error': 'Username and password required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from django.contrib.auth import authenticate
+    user = authenticate(username=username, password=password)
+
+    if user:
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user).data
+        })
+    else:
+        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class NotesViewSet(viewsets.ModelViewSet):
+    serializer_class = NotesSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return Notes.objects.filter(user=self.request.user).select_related('user')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class HomeworkViewSet(viewsets.ModelViewSet):
+    serializer_class = HomeworkSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return Homework.objects.filter(user=self.request.user).select_related('user').order_by('due')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def toggle_finished(self, request, pk=None):
+        homework = self.get_object()
+        homework.is_finished = not homework.is_finished
+        homework.save()
+        return Response({'status': 'updated', 'is_finished': homework.is_finished})
+
+
+class TodoViewSet(viewsets.ModelViewSet):
+    serializer_class = TodoSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return Todo.objects.filter(user=self.request.user).select_related('user')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def toggle_finished(self, request, pk=None):
+        todo = self.get_object()
+        todo.is_finished = not todo.is_finished
+        todo.save()
+        return Response({'status': 'updated', 'is_finished': todo.is_finished})
+
+
+class ProfileViewSet(viewsets.ModelViewSet):
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return Profile.objects.filter(user=self.request.user).select_related('user')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class ExpenseViewSet(viewsets.ModelViewSet):
+    serializer_class = ExpenseSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return Expense.objects.filter(user=self.request.user).select_related('user')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class ChatHistoryViewSet(viewsets.ModelViewSet):
+    serializer_class = ChatHistorySerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return ChatHistory.objects.filter(user=self.request.user).select_related('user').order_by('-timestamp')[:50]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class StudySessionViewSet(viewsets.ModelViewSet):
+    serializer_class = StudySessionSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return StudySession.objects.filter(user=self.request.user).select_related('user').order_by('-start_time')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        session = self.get_object()
+        session.completed = True
+        session.end_time = timezone.now()
+        session.save()
+        return Response({'status': 'completed'})
+
+
+class SharedNoteViewSet(viewsets.ModelViewSet):
+    serializer_class = SharedNoteSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get_queryset(self):
+        return SharedNote.objects.filter(
+            Q(shared_with=self.request.user) | Q(is_public=True)
+        ).exclude(shared_by=self.request.user).select_related('note', 'shared_by')
+
+    def perform_create(self, serializer):
+        serializer.save(shared_by=self.request.user)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@cache_page(300)  # Cache for 5 minutes
+def api_chatbot(request):
+    """Optimized chatbot API with caching"""
+    user_message = request.data.get('message', '').strip()
+
+    if not user_message:
+        return Response({'error': 'Message required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+        prompt = f"You are a helpful study assistant.\n\nStudent Question: {user_message}\n\nAnswer clearly:"
+        response_obj = model.generate_content(prompt)
+        bot_response = response_obj.text
+
+        # Save to database
+        ChatHistory.objects.create(
+            user=request.user,
+            message=user_message,
+            response=bot_response
+        )
+
+        return Response({
+            'user_message': user_message,
+            'bot_response': bot_response
+        })
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@cache_page(600)  # Cache for 10 minutes
+def api_progress_dashboard(request):
+    """Optimized progress dashboard API with caching"""
+    user = request.user
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+
+    # Use aggregation for better performance
+    study_stats = StudySession.objects.filter(user=user, completed=True).aggregate(
+        total_time=Sum('duration'),
+        week_time=Sum('duration', filter=Q(date__gte=week_ago))
+    )
+
+    homework_stats = Homework.objects.filter(user=user).aggregate(
+        total=Count('id'),
+        completed=Count('id', filter=Q(is_finished=True))
+    )
+
+    todo_stats = Todo.objects.filter(user=user).aggregate(
+        total=Count('id'),
+        completed=Count('id', filter=Q(is_finished=True))
+    )
+
+    notes_count = Notes.objects.filter(user=user).count()
+
+    return Response({
+        'study_sessions': {
+            'total_time': study_stats['total_time'] or 0,
+            'week_time': study_stats['week_time'] or 0,
+        },
+        'homework': {
+            'total': homework_stats['total'],
+            'completed': homework_stats['completed'],
+            'pending': homework_stats['total'] - homework_stats['completed'],
+            'completion_rate': round((homework_stats['completed'] / homework_stats['total'] * 100) if homework_stats['total'] > 0 else 0, 1)
+        },
+        'todos': {
+            'total': todo_stats['total'],
+            'completed': todo_stats['completed'],
+            'pending': todo_stats['total'] - todo_stats['completed'],
+            'completion_rate': round((todo_stats['completed'] / todo_stats['total'] * 100) if todo_stats['total'] > 0 else 0, 1)
+        },
+        'notes': {
+            'total': notes_count
+        }
+    })
+
 
 

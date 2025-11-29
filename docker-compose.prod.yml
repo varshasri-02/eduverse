@@ -13,6 +13,17 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - REDIS_URL=redis://redis:6379/1
+    restart: always
+    depends_on:
+      - redis
+    networks:
+      - eduverse-network
+    deploy:
+      replicas: 3  # Multiple instances for zero-downtime
+
+  redis:
+    image: redis:7-alpine
     restart: always
     networks:
       - eduverse-network

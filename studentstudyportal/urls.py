@@ -14,13 +14,24 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.urls.conf import include
 from dashboard import views as dash_views
 from django.contrib.auth import views as auth_views
 from dashboard.health_check import health_check
+from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
 
-
+# API Router
+router = DefaultRouter()
+router.register(r'api/notes', dash_views.NotesViewSet)
+router.register(r'api/homework', dash_views.HomeworkViewSet)
+router.register(r'api/todos', dash_views.TodoViewSet)
+router.register(r'api/profile', dash_views.ProfileViewSet)
+router.register(r'api/expenses', dash_views.ExpenseViewSet)
+router.register(r'api/chat-history', dash_views.ChatHistoryViewSet)
+router.register(r'api/study-sessions', dash_views.StudySessionViewSet)
+router.register(r'api/shared-notes', dash_views.SharedNoteViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,5 +42,11 @@ urlpatterns = [
     path('logout/',auth_views.LogoutView.as_view(template_name="dashboard/logout.html"),name='logout'),
     path('health/', health_check, name='health_check'),
 
-    
+    # API URLs
+    path('', include(router.urls)),
+    path('api/login/', dash_views.api_login, name='api_login'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/chatbot/', dash_views.api_chatbot, name='api_chatbot'),
+    path('api/progress/', dash_views.api_progress_dashboard, name='api_progress'),
+
 ]
