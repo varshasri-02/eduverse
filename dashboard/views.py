@@ -47,6 +47,12 @@ def create_from_serializer(serializer_class, data, user):
     If validation fails, instance is None and errors contains validation errors.
     """
     serializer = serializer_class(data=data)
+    if serializer.is_valid():
+        instance = serializer.save(user=user)
+        return instance, None
+    else:
+        return None, serializer.errors
+
 # Helper function to update model instances using DRF serializers
 def update_from_serializer(serializer_class, instance, data):
     """
@@ -60,12 +66,6 @@ def update_from_serializer(serializer_class, instance, data):
         return True, None
     else:
         return False, serializer.errors
-
-    if serializer.is_valid():
-        instance = serializer.save(user=user)
-        return instance, None
-    else:
-        return None, serializer.errors
 
 
 
@@ -1117,13 +1117,22 @@ class SharedNoteViewSet(viewsets.ModelViewSet):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-@cache_page(300)  # Cache for 5 minutes
 def api_chatbot(request):
-    """Optimized chatbot API with caching"""
+    """Optimized chatbot API with per-user caching"""
+    from django.core.cache import cache
+
     user_message = request.data.get('message', '').strip()
 
     if not user_message:
         return Response({'error': 'Message required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Create per-user cache key
+    cache_key = f"chatbot_response_{request.user.id}_{hash(user_message)}"
+
+    # Check cache first
+    cached_response = cache.get(cache_key)
+    if cached_response:
+        return Response(cached_response)
 
     try:
         genai.configure(api_key=settings.GOOGLE_API_KEY)
@@ -1140,10 +1149,15 @@ def api_chatbot(request):
             response=bot_response
         )
 
-        return Response({
+        response_data = {
             'user_message': user_message,
             'bot_response': bot_response
-        })
+        }
+
+        # Cache the response for 5 minutes per user
+        cache.set(cache_key, response_data, 300)
+
+        return Response(response_data)
 
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1151,10 +1165,18 @@ def api_chatbot(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-@cache_page(600)  # Cache for 10 minutes
 def api_progress_dashboard(request):
-    """Optimized progress dashboard API with caching"""
+    """Optimized progress dashboard API with per-user caching"""
+    from django.core.cache import cache
+
     user = request.user
+    cache_key = f"progress_dashboard_{user.id}"
+
+    # Check cache first
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return Response(cached_data)
+
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
 
@@ -1176,7 +1198,7 @@ def api_progress_dashboard(request):
 
     notes_count = Notes.objects.filter(user=user).count()
 
-    return Response({
+    response_data = {
         'study_sessions': {
             'total_time': study_stats['total_time'] or 0,
             'week_time': study_stats['week_time'] or 0,
@@ -1196,7 +1218,12 @@ def api_progress_dashboard(request):
         'notes': {
             'total': notes_count
         }
-    })
+    }
+
+    # Cache for 10 minutes per user
+    cache.set(cache_key, response_data, 600)
+
+    return Response(response_data)
 
 
 

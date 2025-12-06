@@ -73,11 +73,35 @@ class StudySessionSerializer(serializers.ModelSerializer):
 
 
 class SharedNoteSerializer(serializers.ModelSerializer):
-    note = NotesSerializer(read_only=True)
-    shared_by = UserSerializer(read_only=True)
-    shared_with = UserSerializer(many=True, read_only=True)
+    # Read-only nested serializers for GET responses
+    note_detail = NotesSerializer(source='note', read_only=True)
+    shared_by_detail = UserSerializer(source='shared_by', read_only=True)
+    shared_with_detail = UserSerializer(source='shared_with', many=True, read_only=True)
+
+    # Write-only PK fields for POST/PUT operations
+    note_id = serializers.PrimaryKeyRelatedField(
+        queryset=Notes.objects.all(),
+        source='note',
+        write_only=True,
+        required=True
+    )
+    shared_with_ids = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source='shared_with',
+        many=True,
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = SharedNote
-        fields = ['id', 'note', 'shared_by', 'shared_with', 'is_public', 'created_at']
-        read_only_fields = ['shared_by', 'created_at']
+        fields = [
+            'id',
+            # Read fields
+            'note_detail', 'shared_by_detail', 'shared_with_detail',
+            # Write fields
+            'note_id', 'shared_with_ids', 'is_public',
+            # Read-only
+            'created_at'
+        ]
+        read_only_fields = ['shared_by_detail', 'created_at']
