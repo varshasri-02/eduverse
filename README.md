@@ -39,7 +39,68 @@
 <ul>
     <li>Dictionary API </li>
     <li>Google e-books API</li>
+    <li>Google Gemini AI API (for chatbot)</li>
 </ul>
+
+<h2>API Endpoints:</h2>
+<p>The application provides REST API endpoints for all core features. Authentication is handled via JWT tokens.</p>
+
+<h3>Authentication:</h3>
+<ul>
+    <li><code>POST /api/login/</code> - Login with username/password to get JWT tokens</li>
+    <li><code>POST /api/token/refresh/</code> - Refresh JWT access token</li>
+</ul>
+
+<h3>Notes API:</h3>
+<ul>
+    <li><code>GET /api/notes/</code> - List user's notes</li>
+    <li><code>POST /api/notes/</code> - Create a new note</li>
+    <li><code>GET /api/notes/{id}/</code> - Retrieve a specific note</li>
+    <li><code>PUT /api/notes/{id}/</code> - Update a note</li>
+    <li><code>DELETE /api/notes/{id}/</code> - Delete a note</li>
+</ul>
+
+<h3>Homework API:</h3>
+<ul>
+    <li><code>GET /api/homework/</code> - List user's homework</li>
+    <li><code>POST /api/homework/</code> - Create homework</li>
+    <li><code>GET /api/homework/{id}/</code> - Retrieve homework</li>
+    <li><code>PUT /api/homework/{id}/</code> - Update homework</li>
+    <li><code>DELETE /api/homework/{id}/</code> - Delete homework</li>
+    <li><code>POST /api/homework/{id}/toggle_finished/</code> - Toggle completion status</li>
+</ul>
+
+<h3>Todo API:</h3>
+<ul>
+    <li><code>GET /api/todos/</code> - List user's todos</li>
+    <li><code>POST /api/todos/</code> - Create todo</li>
+    <li><code>GET /api/todos/{id}/</code> - Retrieve todo</li>
+    <li><code>PUT /api/todos/{id}/</code> - Update todo</li>
+    <li><code>DELETE /api/todos/{id}/</code> - Delete todo</li>
+    <li><code>POST /api/todos/{id}/toggle_finished/</code> - Toggle completion status</li>
+</ul>
+
+<h3>Expenses API:</h3>
+<ul>
+    <li><code>GET /api/expenses/</code> - List user's expenses</li>
+    <li><code>POST /api/expenses/</code> - Create expense</li>
+    <li><code>GET /api/expenses/{id}/</code> - Retrieve expense</li>
+    <li><code>PUT /api/expenses/{id}/</code> - Update expense</li>
+    <li><code>DELETE /api/expenses/{id}/</code> - Delete expense</li>
+</ul>
+
+<h3>Other APIs:</h3>
+<ul>
+    <li><code>GET /api/profile/</code> - User profile</li>
+    <li><code>GET /api/chat-history/</code> - Chat history</li>
+    <li><code>GET /api/study-sessions/</code> - Study sessions</li>
+    <li><code>GET /api/shared-notes/</code> - Shared notes</li>
+    <li><code>POST /api/chatbot/</code> - AI chatbot query</li>
+    <li><code>GET /api/progress/</code> - Progress dashboard data</li>
+</ul>
+
+<h3>Postman Collection:</h3>
+<p>A Postman collection file <code>eduverse_api.postman_collection.json</code> is included in the repository for easy API testing.</p>
   
 <h2>Note :</h2>
 

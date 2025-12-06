@@ -24,14 +24,14 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 # API Router
 router = DefaultRouter()
-router.register(r'api/notes', dash_views.NotesViewSet)
-router.register(r'api/homework', dash_views.HomeworkViewSet)
-router.register(r'api/todos', dash_views.TodoViewSet)
-router.register(r'api/profile', dash_views.ProfileViewSet)
-router.register(r'api/expenses', dash_views.ExpenseViewSet)
-router.register(r'api/chat-history', dash_views.ChatHistoryViewSet)
-router.register(r'api/study-sessions', dash_views.StudySessionViewSet)
-router.register(r'api/shared-notes', dash_views.SharedNoteViewSet)
+router.register(r'notes', dash_views.NotesViewSet)
+router.register(r'homework', dash_views.HomeworkViewSet)
+router.register(r'todos', dash_views.TodoViewSet)
+router.register(r'profile', dash_views.ProfileViewSet)
+router.register(r'expenses', dash_views.ExpenseViewSet)
+router.register(r'chat-history', dash_views.ChatHistoryViewSet)
+router.register(r'study-sessions', dash_views.StudySessionViewSet)
+router.register(r'shared-notes', dash_views.SharedNoteViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -43,7 +43,7 @@ urlpatterns = [
     path('health/', health_check, name='health_check'),
 
     # API URLs
-    path('', include(router.urls)),
+    path('api/', include(router.urls)),
     path('api/login/', dash_views.api_login, name='api_login'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/chatbot/', dash_views.api_chatbot, name='api_chatbot'),

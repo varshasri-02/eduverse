@@ -39,6 +39,34 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.throttling import UserRateThrottle
 from .serializers import *
+# Helper function to create model instances using serializers
+def create_from_serializer(serializer_class, data, user):
+    """
+    Helper function to create model instances using DRF serializers.
+    Returns (instance, errors) tuple. If successful, instance is created and errors is None.
+    If validation fails, instance is None and errors contains validation errors.
+    """
+    serializer = serializer_class(data=data)
+# Helper function to update model instances using DRF serializers
+def update_from_serializer(serializer_class, instance, data):
+    """
+    Helper function to update model instances using DRF serializers.
+    Returns (success, errors) tuple. If successful, success is True and errors is None.
+    If validation fails, success is False and errors contains validation errors.
+    """
+    serializer = serializer_class(instance, data=data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return True, None
+    else:
+        return False, serializer.errors
+
+    if serializer.is_valid():
+        instance = serializer.save(user=user)
+        return instance, None
+    else:
+        return None, serializer.errors
+
 
 
 # Create your views here.
@@ -53,14 +81,18 @@ def notes(request):
     if request.method == "POST":
         form = NotesForm(request.POST)
         if form.is_valid():
-            notes = Notes(
-                user=request.user, 
-                title=request.POST['title'], 
-                description=request.POST['description']
-            )
-            notes.save()
-            messages.success(request, f"Notes Added from {request.user.username} successfully!")
-            return redirect("notes")
+            data = {
+                'title': request.POST['title'],
+                'description': request.POST['description']
+            }
+            instance, errors = create_from_serializer(NotesSerializer, data, request.user)
+            if instance:
+                messages.success(request, f"Notes Added from {request.user.username} successfully!")
+                return redirect("notes")
+            else:
+                for field, error_list in errors.items():
+                    for error in error_list:
+                        messages.error(request, f"{field}: {error}")
     else:
         form = NotesForm()
     notes = Notes.objects.filter(user=request.user)
@@ -211,24 +243,28 @@ def homework(request):
                 finished = True if finished == 'on' else False
             except:
                 finished = False
-            
-            homeworks = Homework(
-                user=request.user,
-                subject=request.POST['subject'],
-                title=request.POST['title'],
-                description=request.POST['description'],
-                due=request.POST['due'],
-                is_finished=finished
-            )
-            homeworks.save()
-            messages.success(request, f'Homework Added from {request.user.username}!!')
-            return redirect("homework")
+
+            data = {
+                'subject': request.POST['subject'],
+                'title': request.POST['title'],
+                'description': request.POST['description'],
+                'due': request.POST['due'],
+                'is_finished': finished
+            }
+            instance, errors = create_from_serializer(HomeworkSerializer, data, request.user)
+            if instance:
+                messages.success(request, f'Homework Added from {request.user.username}!!')
+                return redirect("homework")
+            else:
+                for field, error_list in errors.items():
+                    for error in error_list:
+                        messages.error(request, f"{field}: {error}")
     else:
         form = HomeworkForm()
-    
+
     homework = Homework.objects.filter(user=request.user).order_by("due")
     homework_done = len(homework) == 0
-    
+
     context = {
         'homeworks': homework,
         'homeworks_done': homework_done,
@@ -241,9 +277,11 @@ def homework(request):
 @login_required
 def update_homework(request, pk=None):
     homework = get_object_or_404(Homework, id=pk, user=request.user)
-    homework.is_finished = not homework.is_finished
-    homework.save()
-    messages.success(request, f"Homework status updated!")
+    success, errors = update_from_serializer(HomeworkSerializer, homework, {'is_finished': not homework.is_finished})
+    if success:
+        messages.success(request, f"Homework status updated!")
+    else:
+        messages.error(request, "Error updating homework status")
     return redirect("homework")
 
 
@@ -267,20 +305,24 @@ def todo(request):
                 finished = True if finished == 'on' else False
             except:
                 finished = False
-            
-            todos = Todo(
-                user=request.user,
-                title=request.POST['title'],
-                is_finished=finished
-            )
-            todos.save()
-            messages.success(request, f"Todo Added from {request.user.username}!!")
-            return redirect("todo")
+
+            data = {
+                'title': request.POST['title'],
+                'is_finished': finished
+            }
+            instance, errors = create_from_serializer(TodoSerializer, data, request.user)
+            if instance:
+                messages.success(request, f"Todo Added from {request.user.username}!!")
+                return redirect("todo")
+            else:
+                for field, error_list in errors.items():
+                    for error in error_list:
+                        messages.error(request, f"{field}: {error}")
     else:
         form = TodoForm()
-    
+
     todo = Todo.objects.filter(user=request.user)
-    
+
     # Check if there are any todos and if all are finished
     if len(todo) == 0:
         todos_done = True  # No todos exist
@@ -288,7 +330,7 @@ def todo(request):
         # Check if all existing todos are finished
         incomplete_todos = todo.filter(is_finished=False).count()
         todos_done = incomplete_todos == 0
-    
+
     context = {
         'form': form,
         'todos': todo,
@@ -301,9 +343,11 @@ def todo(request):
 @login_required
 def update_todo(request, pk=None):
     todo = get_object_or_404(Todo, id=pk, user=request.user)
-    todo.is_finished = not todo.is_finished
-    todo.save()
-    messages.success(request, "Todo status updated!")
+    success, errors = update_from_serializer(TodoSerializer, todo, {'is_finished': not todo.is_finished})
+    if success:
+        messages.success(request, "Todo status updated!")
+    else:
+        messages.error(request, "Error updating todo status")
     return redirect("todo")
 
 
@@ -514,11 +558,11 @@ def expense(request):
         text = request.POST.get('text', '').strip()
         amount = request.POST.get('amount', '').strip()
         expense_type = request.POST.get('expense_type', '')
-        
+
         if not text or not amount or not expense_type:
             messages.error(request, "Please fill all fields")
             return redirect("expense")
-        
+
         try:
             amount_float = float(amount)
             if amount_float <= 0:
@@ -527,27 +571,30 @@ def expense(request):
         except ValueError:
             messages.error(request, "Invalid amount")
             return redirect("expense")
-        
-        expense = Expense(
-            name=text, 
-            amount=amount_float, 
-            expense_type=expense_type, 
-            user=request.user
-        )
-        expense.save()
 
-        # Updating the wallet status after receiving every transaction history
-        if expense_type == 'Positive':
-            profile.balance += amount_float
-            profile.income += amount_float
+        data = {
+            'name': text,
+            'amount': amount_float,
+            'expense_type': expense_type
+        }
+        instance, errors = create_from_serializer(ExpenseSerializer, data, request.user)
+        if instance:
+            # Updating the wallet status after receiving every transaction history
+            if expense_type == 'Positive':
+                profile.balance += amount_float
+                profile.income += amount_float
+            else:
+                profile.expenses += amount_float
+                profile.balance -= amount_float
+
+            profile.save()
+            messages.success(request, f"Expense added successfully!")
+            return redirect("expense")
         else:
-            profile.expenses += amount_float
-            profile.balance -= amount_float
-        
-        profile.save()
-        messages.success(request, f"Expense added successfully!")
-        return redirect("expense")
-    
+            for field, error_list in errors.items():
+                for error in error_list:
+                    messages.error(request, f"{field}: {error}")
+
     context = {
         'profile': profile,
         'expenses': expenses
@@ -944,6 +991,7 @@ class NotesViewSet(viewsets.ModelViewSet):
     serializer_class = NotesSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = Notes.objects.all()
 
     def get_queryset(self):
         return Notes.objects.filter(user=self.request.user).select_related('user')
@@ -956,6 +1004,7 @@ class HomeworkViewSet(viewsets.ModelViewSet):
     serializer_class = HomeworkSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = Homework.objects.all()
 
     def get_queryset(self):
         return Homework.objects.filter(user=self.request.user).select_related('user').order_by('due')
@@ -975,6 +1024,7 @@ class TodoViewSet(viewsets.ModelViewSet):
     serializer_class = TodoSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = Todo.objects.all()
 
     def get_queryset(self):
         return Todo.objects.filter(user=self.request.user).select_related('user')
@@ -994,6 +1044,7 @@ class ProfileViewSet(viewsets.ModelViewSet):
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = Profile.objects.all()
 
     def get_queryset(self):
         return Profile.objects.filter(user=self.request.user).select_related('user')
@@ -1006,6 +1057,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = Expense.objects.all()
 
     def get_queryset(self):
         return Expense.objects.filter(user=self.request.user).select_related('user')
@@ -1018,6 +1070,7 @@ class ChatHistoryViewSet(viewsets.ModelViewSet):
     serializer_class = ChatHistorySerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = ChatHistory.objects.all()
 
     def get_queryset(self):
         return ChatHistory.objects.filter(user=self.request.user).select_related('user').order_by('-timestamp')[:50]
@@ -1030,6 +1083,7 @@ class StudySessionViewSet(viewsets.ModelViewSet):
     serializer_class = StudySessionSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = StudySession.objects.all()
 
     def get_queryset(self):
         return StudySession.objects.filter(user=self.request.user).select_related('user').order_by('-start_time')
@@ -1050,6 +1104,7 @@ class SharedNoteViewSet(viewsets.ModelViewSet):
     serializer_class = SharedNoteSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    queryset = SharedNote.objects.all()
 
     def get_queryset(self):
         return SharedNote.objects.filter(

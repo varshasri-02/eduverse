@@ -1,0 +1,207 @@
+{
+  "info": {
+    "name": "Eduverse API",
+    "description": "API collection for Eduverse student portal",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "jwt_token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"testpass\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "login", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notes",
+      "item": [
+        {
+          "name": "List Notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/notes/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notes", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Sample Note\",\n  \"description\": \"This is a sample note.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notes/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notes", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Homework",
+      "item": [
+        {
+          "name": "List Homework",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/homework/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "homework", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Homework",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Math\",\n  \"title\": \"Algebra Homework\",\n  \"description\": \"Solve equations\",\n  \"due\": \"2024-12-31T23:59:59Z\",\n  \"is_finished\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/homework/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "homework", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Todos",
+      "item": [
+        {
+          "name": "List Todos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/todos/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "todos", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Todo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Study Python\",\n  \"is_finished\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/todos/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "todos", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "List Expenses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/expenses/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "expenses", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Expense",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coffee\",\n  \"amount\": 5.00,\n  \"expense_type\": \"Negative\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/expenses/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "expenses", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

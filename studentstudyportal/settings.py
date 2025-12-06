@@ -11,7 +11,7 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY')
 if not SECRET_KEY:
-    raise ValueError("⚠️ SECRET_KEY not found in .env")
+    raise ValueError("SECRET_KEY not found in .env")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -104,9 +104,9 @@ CRISPY_TEMPLATE_PACK = "bootstrap4"
 # Load Google API key from .env
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 if not GOOGLE_API_KEY:
-    print("⚠️ WARNING: GOOGLE_API_KEY not found in .env")
+    print("WARNING: GOOGLE_API_KEY not found in .env")
 else:
-    print(f"✓ Google API Key loaded: {GOOGLE_API_KEY[:15]}...")
+    print(f"Google API Key loaded: {GOOGLE_API_KEY[:15]}...")
 
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
